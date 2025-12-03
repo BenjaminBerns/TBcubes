@@ -1,13 +1,15 @@
 <template>
-  <div v-if="isVisible" class="modal-overlay" @click.self="$emit('cancel')">
-    <div class="modal-content">
-      <p class="confirmation-text momo-trust-display-regular color-gray-500">Etes vous sur de vouloir supprimer ce temps ?</p>
-      <div class="button-container">
-        <button class="confirm-button momo-trust-display-regular" @click="$emit('confirm')">OK</button>
-        <button class="cancel-button momo-trust-display-regular" @click="$emit('cancel')">Retour</button>
+  <Teleport to="body">
+    <div v-if="isVisible" class="modal-overlay" @click.self="$emit('cancel')">
+      <div class="modal-content">
+        <p class="confirmation-text momo-trust-display-regular color-gray-500">Etes vous sur de vouloir supprimer ce temps ?</p>
+        <div class="button-container">
+          <button class="confirm-button momo-trust-display-regular" @click="$emit('confirm')">OK</button>
+          <button class="cancel-button momo-trust-display-regular" @click="$emit('cancel')">Retour</button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>

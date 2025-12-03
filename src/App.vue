@@ -8,25 +8,40 @@
       <img v-if="settings.backgroundType === 'image'" :src="settings.backgroundUrl" alt="background" />
       <video v-else-if="settings.backgroundType === 'video'" :src="settings.backgroundUrl" autoplay loop muted playsinline></video>
     </div>
-    <Navigation class="nav-component" @open-settings="openSettings" :translations="t" />
-    <div class="center-container">
-      <Scramble :scramble="currentScramble" class="scramble-component" />
-      <Timer 
-        @on-stop="handleStop" 
-        @on-start="handleStart" 
-        :settings="settings"
-        :last-time="savedTimes.length > 0 ? savedTimes[savedTimes.length - 1] : null"
-        @toggle-penalty="(type) => togglePenalty(savedTimes.length - 1, type)"
-      />
-    </div>
+    <Navigation 
+      class="nav-component" 
+      @open-settings="openSettings" 
+      :translations="t" 
+      @navigate="(view) => currentView = view"
+      :user="user"
+      @login="login"
+      @logout="logout"
+    />
     <div class="main-content">
-      <!-- Content that should flow normally if any -->
+      <template v-if="currentView === 'timer'">
+        <div class="center-container">
+          <Scramble :scramble="currentScramble" class="scramble-component" />
+          <Timer 
+            @on-stop="handleStop" 
+            @on-start="handleStart" 
+            :settings="settings"
+            :last-time="savedTimes.length > 0 ? savedTimes[savedTimes.length - 1] : null"
+            @toggle-penalty="(type) => togglePenalty(savedTimes.length - 1, type)"
+          />
+        </div>
+      </template>
+      <template v-else-if="currentView === 'oll'">
+        <OLLList @back="currentView = 'timer'" />
+      </template>
     </div>
     <Save 
       :times="savedTimes" 
+      :current-session="currentSessionType"
+      :available-sessions="availableSessions"
       class="save-component" 
       @delete-time="handleDeleteTime" 
       @toggle-penalty="togglePenalty"
+      @update-session="updateSession"
       :translations="t" 
     />
     <SettingsModal 
@@ -45,23 +60,49 @@ import Save from './components/Save.vue';
 import Navigation from './components/Navigation.vue';
 import Scramble from './components/Scramble.vue';
 import SettingsModal from './components/SettingsModal.vue';
-import Scrambo from 'scrambo';
+import OLLList from './components/OLLList.vue';
 
-const savedTimes = ref([]);
+import Scrambo from 'scrambo';
+import WCAService from './services/wca';
+import { db } from './services/db';
+
+const getDefaultSessions = () => ({
+  '2x2': [],
+  '3x3': [],
+  '4x4': [],
+  'Pyraminx': [],
+  'Megaminx': [],
+  'Square-1': [],
+  'Blind': []
+});
+
+const sessions = ref(getDefaultSessions());
+const currentSessionType = ref('3x3');
+const availableSessions = Object.keys(sessions.value);
+
+const savedTimes = computed(() => sessions.value[currentSessionType.value]);
+
 const isTimerRunning = ref(false);
 const currentScramble = ref('');
 const scrambler = new Scrambo();
+const currentView = ref('timer'); // 'timer', 'oll'
 
 const isSettingsOpen = ref(false);
 const settings = ref({
-  useInspection: false,
+  useInspection: true,
   language: 'en',
   timerFont: 'Momo Trust Display',
   timerColor: '#353535',
   backgroundColor: '#FFFFFF',
+  textColor: '#353535',
+  navBackgroundColor: '#353535',
+  navTextColor: '#FFFFFF',
+  statsBackgroundColor: 'transparent',
+  historyBackgroundColor: '#FFFFFF',
   backgroundUrl: null,
   backgroundType: 'image',
-  theme: 'default'
+  theme: 'default',
+  customThemes: {}
 });
 
 const themes = {
@@ -72,7 +113,9 @@ const themes = {
     navTextColor: '#FFFFFF',
     tableBackgroundColor: '#FFFFFF',
     tableTextColor: '#353535',
-    timerColor: '#353535'
+    timerColor: '#353535',
+    statsBackgroundColor: 'transparent',
+    historyBackgroundColor: '#FFFFFF'
   },
   blue: {
     backgroundColor: '#0f172a',
@@ -81,7 +124,9 @@ const themes = {
     navTextColor: '#94a3b8',
     tableBackgroundColor: '#0f172a',
     tableTextColor: '#e2e8f0',
-    timerColor: '#38bdf8'
+    timerColor: '#38bdf8',
+    statsBackgroundColor: 'transparent',
+    historyBackgroundColor: '#0f172a'
   },
   dark: {
     backgroundColor: '#121212',
@@ -90,32 +135,99 @@ const themes = {
     navTextColor: '#a0a0a0',
     tableBackgroundColor: '#121212',
     tableTextColor: '#e0e0e0',
-    timerColor: '#e0e0e0'
+    timerColor: '#e0e0e0',
+    statsBackgroundColor: 'transparent',
+    historyBackgroundColor: '#121212'
+  },
+  fire: {
+    backgroundColor: '#3a0e0e',
+    textColor: '#ffcc00',
+    navBackgroundColor: '#5a1e1e',
+    navTextColor: '#ffcc00',
+    tableBackgroundColor: '#2a0a0a',
+    tableTextColor: '#ffcc00',
+    timerColor: '#ff4500',
+    statsBackgroundColor: 'rgba(58, 14, 14, 0.8)',
+    historyBackgroundColor: '#2a0a0a'
+  },
+  nature: {
+    backgroundColor: '#0e2b0e',
+    textColor: '#e0ffe0',
+    navBackgroundColor: '#1e4b1e',
+    navTextColor: '#e0ffe0',
+    tableBackgroundColor: '#0a1f0a',
+    tableTextColor: '#e0ffe0',
+    timerColor: '#90ee90',
+    statsBackgroundColor: 'rgba(14, 43, 14, 0.8)',
+    historyBackgroundColor: '#0a1f0a'
+  },
+  winter: {
+    backgroundColor: '#0e1a2b',
+    textColor: '#e0f0ff',
+    navBackgroundColor: '#1e3a5b',
+    navTextColor: '#e0f0ff',
+    tableBackgroundColor: '#0a121f',
+    tableTextColor: '#e0f0ff',
+    timerColor: '#add8e6',
+    statsBackgroundColor: 'rgba(14, 26, 43, 0.8)',
+    historyBackgroundColor: '#0a121f'
   }
 };
 
 const applyTheme = (themeName) => {
-  const theme = themes[themeName] || themes.default;
+  let theme = themes[themeName];
+  
+  // Check if it's a custom theme
+  if (!theme && settings.value.customThemes && settings.value.customThemes[themeName]) {
+    theme = settings.value.customThemes[themeName];
+  }
+  
+  // Fallback to default if still not found
+  if (!theme) {
+    theme = themes.default;
+  }
+
   const root = document.documentElement;
   
-  root.style.setProperty('--bg-color', theme.backgroundColor);
-  root.style.setProperty('--text-color', theme.textColor);
-  root.style.setProperty('--nav-bg-color', theme.navBackgroundColor);
-  root.style.setProperty('--nav-text-color', theme.navTextColor);
-  root.style.setProperty('--table-bg-color', theme.tableBackgroundColor);
-  root.style.setProperty('--table-text-color', theme.tableTextColor);
-  root.style.setProperty('--timer-color', theme.timerColor);
+  // Use settings values if we are in 'custom' mode (unsaved/unnamed custom)
+  // OR if we are currently editing a custom theme (this logic might need refinement)
+  // For now, if themeName is 'custom', use settings values.
+  // If themeName is a named custom theme, use the values from that theme object.
+  const isCustom = themeName === 'custom';
   
-  // Update settings for consistency if needed, but CSS vars handle the look
-  if (themeName !== 'custom') {
-    settings.value.backgroundColor = theme.backgroundColor;
-    settings.value.timerColor = theme.timerColor;
+  const bg = isCustom ? settings.value.backgroundColor : theme.backgroundColor;
+  const text = isCustom ? settings.value.textColor : theme.textColor;
+  const navBg = isCustom ? settings.value.navBackgroundColor : theme.navBackgroundColor;
+  const navText = isCustom ? settings.value.navTextColor : theme.navTextColor;
+  const tableBg = theme.tableBackgroundColor; // Deprecated/Unused?
+  const tableText = isCustom ? settings.value.textColor : theme.tableTextColor;
+  const timer = isCustom ? settings.value.timerColor : theme.timerColor;
+  const statsBg = isCustom ? settings.value.statsBackgroundColor : theme.statsBackgroundColor;
+  const historyBg = isCustom ? settings.value.historyBackgroundColor : theme.historyBackgroundColor;
+
+  root.style.setProperty('--bg-color', bg);
+  root.style.setProperty('--text-color', text);
+  root.style.setProperty('--nav-bg-color', navBg);
+  root.style.setProperty('--nav-text-color', navText);
+  root.style.setProperty('--table-bg-color', historyBg); // Map history bg to table bg var
+  root.style.setProperty('--table-text-color', tableText);
+  root.style.setProperty('--timer-color', timer);
+  root.style.setProperty('--stats-bg-color', statsBg);
+  
+  if (!isCustom) {
+    settings.value.backgroundColor = bg;
+    settings.value.textColor = text;
+    settings.value.navBackgroundColor = navBg;
+    settings.value.navTextColor = navText;
+    settings.value.timerColor = timer;
+    settings.value.statsBackgroundColor = statsBg;
+    settings.value.historyBackgroundColor = historyBg;
   }
 };
 
-watch(() => settings.value.theme, (newTheme) => {
-  applyTheme(newTheme);
-}, { immediate: true });
+watch(() => settings.value, (newSettings) => {
+  applyTheme(newSettings.theme);
+}, { deep: true, immediate: true });
 
 const translations = {
   en: {
@@ -142,16 +254,65 @@ const translations = {
 
 const t = computed(() => translations[settings.value.language]);
 
-onMounted(() => {
+
+
+const user = ref(null);
+
+onMounted(async () => {
   currentScramble.value = scrambler.get(1)[0]; // Initial scramble
+
+  // Check for WCA access token in URL (callback)
+  const accessToken = WCAService.getAccessTokenFromUrl();
+  if (accessToken) {
+    // Save token (optional, for persistence across reloads if not using implicit flow correctly, 
+    // but implicit flow usually requires re-auth or storing token in localStorage)
+    localStorage.setItem('wca_access_token', accessToken);
+    
+    // Clear hash
+    window.history.replaceState(null, null, ' ');
+    
+    // Fetch profile
+    user.value = await WCAService.getProfile(accessToken);
+  } else {
+    // Check local storage
+    const storedToken = localStorage.getItem('wca_access_token');
+    if (storedToken) {
+       user.value = await WCAService.getProfile(storedToken);
+    }
+  }
 });
 
-const handleStop = (time) => {
-  savedTimes.value.push({
+watch(user, async (newUser) => {
+  const userId = newUser ? newUser.id : 'guest';
+  const savedSessions = await db.getUserData(userId);
+  if (savedSessions) {
+    // Merge with default to ensure all keys exist
+    sessions.value = { ...getDefaultSessions(), ...savedSessions };
+  } else {
+    sessions.value = getDefaultSessions();
+  }
+}, { immediate: true });
+
+watch(sessions, async (newSessions) => {
+  const userId = user.value ? user.value.id : 'guest';
+  await db.saveUserData(userId, newSessions);
+}, { deep: true });
+
+const login = () => {
+  WCAService.login();
+};
+
+const logout = () => {
+  WCAService.logout();
+  user.value = null;
+};
+
+const handleStop = (time, penalty = null) => {
+  sessions.value[currentSessionType.value].push({
     time: time,
     scramble: currentScramble.value,
     date: new Date(),
-    penalty: null // null, 'DNF', '+2'
+    penalty: penalty // null, 'DNF', '+2'
   });
   isTimerRunning.value = false;
   currentScramble.value = scrambler.get(1)[0]; // Generate new scramble
@@ -162,11 +323,11 @@ const handleStart = () => {
 };
 
 const handleDeleteTime = (index) => {
-  savedTimes.value.splice(index, 1);
+  sessions.value[currentSessionType.value].splice(index, 1);
 };
 
 const togglePenalty = (index, type) => {
-  const timeEntry = savedTimes.value[index];
+  const timeEntry = sessions.value[currentSessionType.value][index];
   if (!timeEntry) return;
 
   if (timeEntry.penalty === type) {
@@ -174,6 +335,10 @@ const togglePenalty = (index, type) => {
   } else {
     timeEntry.penalty = type; // Set new penalty
   }
+};
+
+const updateSession = (newSession) => {
+  currentSessionType.value = newSession;
 };
 
 const openSettings = () => {
@@ -229,10 +394,6 @@ const updateSettings = (newSettings) => {
 }
 
 .center-container {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -251,8 +412,15 @@ const updateSettings = (newSettings) => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center; /* Center content vertically by default */
   position: relative;
   pointer-events: none;
+  height: 100%;
+  overflow: hidden; /* Prevent double scrollbars */
+}
+
+.main-content > * {
+  pointer-events: auto;
 }
 
 .nav-component,

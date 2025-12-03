@@ -1,42 +1,44 @@
 <template>
-  <div v-if="isVisible" class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal-content">
-      <h1 class="time-display momo-trust-display-regular color-gray-500">{{ data.time }}</h1>
-      <p class="scramble-display momo-trust-display-regular color-gray-500">{{ data.scramble }}</p>
-      
-      <div class="penalty-controls">
-        <button 
-          class="penalty-btn momo-trust-display-regular" 
-          :class="{ active: data.penalty === '+2' }"
-          @click="$emit('toggle-penalty', '+2')"
-        >
-          +2
-        </button>
-        <button 
-          class="penalty-btn momo-trust-display-regular" 
-          :class="{ active: data.penalty === 'DNF' }"
-          @click="$emit('toggle-penalty', 'DNF')"
-        >
-          DNF
-        </button>
-      </div>
-
-      <div class="stats-container momo-trust-display-regular color-gray-500">
-        <div class="stat-item">
-          <span class="stat-label">Avg 5:</span>
-          <span class="stat-value">{{ data.avg5 }}</span>
+  <Teleport to="body">
+    <div v-if="isVisible" class="modal-overlay" @click.self="$emit('close')">
+      <div class="modal-content">
+        <h1 class="time-display momo-trust-display-regular color-gray-500">{{ data.time }}</h1>
+        <p class="scramble-display momo-trust-display-regular color-gray-500">{{ data.scramble }}</p>
+        
+        <div class="penalty-controls">
+          <button 
+            class="penalty-btn momo-trust-display-regular" 
+            :class="{ active: data.penalty === '+2' }"
+            @click="$emit('toggle-penalty', '+2')"
+          >
+            +2
+          </button>
+          <button 
+            class="penalty-btn momo-trust-display-regular" 
+            :class="{ active: data.penalty === 'DNF' }"
+            @click="$emit('toggle-penalty', 'DNF')"
+          >
+            DNF
+          </button>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Avg 12:</span>
-          <span class="stat-value">{{ data.avg12 }}</span>
+
+        <div class="stats-container momo-trust-display-regular color-gray-500">
+          <div class="stat-item">
+            <span class="stat-label">Avg 5:</span>
+            <span class="stat-value">{{ data.avg5 }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Avg 12:</span>
+            <span class="stat-value">{{ data.avg12 }}</span>
+          </div>
         </div>
+
+        <p class="date-display momo-trust-display-regular color-gray-500">{{ formatDate(data.date) }}</p>
+
+        <button class="close-button momo-trust-display-regular" @click="$emit('close')">OK</button>
       </div>
-
-      <p class="date-display momo-trust-display-regular color-gray-500">{{ formatDate(data.date) }}</p>
-
-      <button class="close-button momo-trust-display-regular" @click="$emit('close')">OK</button>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup>

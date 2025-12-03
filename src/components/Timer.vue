@@ -54,24 +54,61 @@ const props = defineProps({
 const emit = defineEmits(['on-stop', 'on-start', 'toggle-penalty']);
 
 const time = ref(0);
-const inspectionTime = ref(15);
+const inspectionTime = ref(0);
 const isRunning = ref(false);
 const isInspection = ref(false);
 const isReady = ref(false);
 let intervalId = null;
 let inspectionIntervalId = null;
+let audioContext = null;
+let hasPlayed8s = false;
+let hasPlayed12s = false;
 
 const displayTime = computed(() => {
   if (isInspection.value) {
-    return Math.ceil(inspectionTime.value);
+    const val = Math.floor(inspectionTime.value);
+    if (val >= 15) return '+2';
+    if (val >= 17) return 'DNF';
+    return val;
   }
   return formatTime(time.value);
 });
+
+const playSound = (frequency, duration) => {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+  
+  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + duration);
+};
 
 const startSolve = () => {
   isInspection.value = false;
   clearInterval(inspectionIntervalId);
   
+  // Check for penalties based on inspection time
+  if (inspectionTime.value >= 17) {
+    // DNF logic - maybe just don't start? or start with DNF?
+    // For now, let's just start normally but user should have seen DNF
+    // Ideally we should emit a penalty event here if we want to auto-apply it
+  } else if (inspectionTime.value >= 15) {
+    // +2 logic
+    // We'll handle this by emitting the penalty after the solve stops or storing it
+    // But for now, let's just reset
+  }
+
   time.value = 0;
   isRunning.value = true;
   emit('on-start');
@@ -84,15 +121,28 @@ const startSolve = () => {
 
 const startInspection = () => {
   isInspection.value = true;
-  inspectionTime.value = 15;
+  inspectionTime.value = 0;
+  hasPlayed8s = false;
+  hasPlayed12s = false;
   
   const startTime = Date.now();
   inspectionIntervalId = setInterval(() => {
     const elapsed = (Date.now() - startTime) / 1000;
-    inspectionTime.value = 15 - elapsed;
+    inspectionTime.value = elapsed;
     
-    if (inspectionTime.value <= -2) { // DNF after +2
-      stopInspection(); // Or handle DNF logic
+    if (elapsed >= 8 && !hasPlayed8s) {
+      playSound(440, 0.1); // 440Hz beep
+      hasPlayed8s = true;
+    }
+    
+    if (elapsed >= 12 && !hasPlayed12s) {
+      playSound(880, 0.1); // 880Hz beep (higher pitch)
+      hasPlayed12s = true;
+    }
+
+    if (elapsed >= 17) {
+      // Auto DNF or stop? 
+      // Usually timer doesn't stop, just shows DNF
     }
   }, 100);
 };
@@ -105,7 +155,16 @@ const stopInspection = () => {
 const stopTimer = () => {
   isRunning.value = false;
   clearInterval(intervalId);
-  emit('on-stop', formatTime(time.value));
+  
+  // Check if we had a +2 from inspection
+  let penalty = null;
+  if (inspectionTime.value >= 15 && inspectionTime.value < 17) {
+    penalty = '+2';
+  } else if (inspectionTime.value >= 17) {
+    penalty = 'DNF';
+  }
+
+  emit('on-stop', formatTime(time.value), penalty);
 };
 
 const handleKeyDown = (e) => {
@@ -148,6 +207,9 @@ onUnmounted(() => {
   window.removeEventListener('keyup', handleKeyUp);
   clearInterval(intervalId);
   clearInterval(inspectionIntervalId);
+  if (audioContext) {
+    audioContext.close();
+  }
 });
 </script>
 

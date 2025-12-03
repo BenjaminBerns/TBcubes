@@ -10,13 +10,35 @@
     </div>
     
     <div class="nav-content" v-show="isOpen">
+      <!-- Account Section -->
+      <div class="nav-section account-section">
+        <h3 class="momo-trust-display-regular color-gray-500">
+          {{ translations.account || 'Account' }}
+        </h3>
+        <div v-if="user" class="user-profile">
+          <img :src="user.avatar.thumb_url" alt="Avatar" class="user-avatar" v-if="user.avatar && user.avatar.thumb_url">
+          <div class="user-info">
+            <span class="user-name momo-trust-display-regular color-gray-500">{{ user.name }}</span>
+            <span class="user-wca-id momo-trust-display-regular color-gray-500" v-if="user.wca_id">{{ user.wca_id }}</span>
+          </div>
+          <button class="logout-btn momo-trust-display-regular" @click="$emit('logout')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-right" viewBox="0 0 16 16">
+              <path fill-rule="evenodd" d="M10 12.5a.5.5 0 0 1-.5.5h-8a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v2a.5.5 0 0 0 1 0v-2A1.5 1.5 0 0 0 9.5 2h-8A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h8a1.5 1.5 0 0 0 1.5-1.5v-2a.5.5 0 0 0-1 0v2z"/>
+              <path fill-rule="evenodd" d="M15.854 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L14.293 7.5H5.5a.5.5 0 0 0 0 1h8.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3z"/>
+            </svg>
+          </button>
+        </div>
+        <button v-else class="login-btn momo-trust-display-regular" @click="$emit('login')">
+          Login with WCA
+        </button>
+      </div>
       <div class="nav-section">
         <h3 class="momo-trust-display-regular color-gray-500" @click="toggleSection('algorithms')">
           {{ translations.algorithms }} {{ openSections.algorithms ? '-' : '+' }}
         </h3>
         <ul v-if="openSections.algorithms" class="nav-list">
           <li class="momo-trust-display-regular color-gray-500">PLL</li>
-          <li class="momo-trust-display-regular color-gray-500">OLL</li>
+          <li class="momo-trust-display-regular color-gray-500" @click="$emit('navigate', 'oll')">OLL</li>
         </ul>
       </div>
       <div class="nav-section">
@@ -52,8 +74,13 @@ const props = defineProps({
       menu: 'Menu',
       algorithms: 'Algorithms',
       tutorials: 'Tutorials',
-      settings: 'Settings'
+      settings: 'Settings',
+      account: 'Account'
     })
+  },
+  user: {
+    type: Object,
+    default: null
   }
 });
 
@@ -63,7 +90,7 @@ const openSections = ref({
   tutorials: false
 });
 
-const emit = defineEmits(['open-settings']);
+const emit = defineEmits(['open-settings', 'navigate', 'login', 'logout']);
 
 const toggleNav = () => {
   isOpen.value = !isOpen.value;
@@ -235,5 +262,75 @@ const toggleSection = (section) => {
 
 .color-gray-500 {
   color: var(--nav-text-color, #D9D9D9);
+}
+
+.account-section {
+  margin-top: 0;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 15px;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-wca-id {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.login-btn {
+  background-color: #353535;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 5px;
+  transition: background-color 0.2s;
+}
+
+.login-btn:hover {
+  background-color: #555;
+}
+
+.logout-btn {
+  background: none;
+  border: none;
+  color: var(--nav-text-color, #D9D9D9);
+  cursor: pointer;
+  padding: 5px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.logout-btn:hover {
+  opacity: 1;
 }
 </style>

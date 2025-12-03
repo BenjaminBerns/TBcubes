@@ -1,6 +1,59 @@
 <template>
   <div class="save-container">
-    <h2 class="momo-trust-display-regular color-gray-500 header-title">{{ translations.savedTimes }}</h2>
+    <div class="header-container">
+      <h2 class="momo-trust-display-regular color-gray-500 header-title">{{ translations.savedTimes }}</h2>
+      <div class="session-selector">
+        <select 
+          :value="currentSession" 
+          @change="$emit('update-session', $event.target.value)"
+          class="session-dropdown momo-trust-display-regular"
+        >
+          <option v-for="session in availableSessions" :key="session" :value="session">
+            {{ session }}
+          </option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="stats-table-container">
+      <table class="stats-table momo-trust-display-regular">
+        <thead>
+          <tr>
+            <th></th>
+            <th class="color-gray-500">en cours</th>
+            <th class="color-gray-500">meilleure</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="color-gray-500 label-col">temps</td>
+            <td class="color-gray-500">{{ stats.current.time }}</td>
+            <td class="color-gray-500">{{ stats.best.time }}</td>
+          </tr>
+          <tr>
+            <td class="color-gray-500 label-col">mo3</td>
+            <td class="color-gray-500">{{ stats.current.mo3 }}</td>
+            <td class="color-gray-500">{{ stats.best.mo3 }}</td>
+          </tr>
+          <tr>
+            <td class="color-gray-500 label-col">ao5</td>
+            <td class="color-gray-500">{{ stats.current.ao5 }}</td>
+            <td class="color-gray-500">{{ stats.best.ao5 }}</td>
+          </tr>
+          <tr>
+            <td class="color-gray-500 label-col">ao12</td>
+            <td class="color-gray-500">{{ stats.current.ao12 }}</td>
+            <td class="color-gray-500">{{ stats.best.ao12 }}</td>
+          </tr>
+          <tr>
+            <td class="color-gray-500 label-col">ao100</td>
+            <td class="color-gray-500">{{ stats.current.ao100 }}</td>
+            <td class="color-gray-500">{{ stats.best.ao100 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <div class="table-container">
       <table class="time-table">
         <thead>
@@ -57,6 +110,14 @@ const props = defineProps({
     type: Array,
     required: true
   },
+  currentSession: {
+    type: String,
+    required: true
+  },
+  availableSessions: {
+    type: Array,
+    required: true
+  },
   translations: {
     type: Object,
     required: true,
@@ -69,7 +130,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['delete-time', 'toggle-penalty']);
+const emit = defineEmits(['delete-time', 'toggle-penalty', 'update-session']);
 
 const isModalOpen = ref(false);
 const selectedTimeData = ref({});
@@ -107,32 +168,106 @@ const handleTogglePenalty = (index, type) => {
   emit('toggle-penalty', index, type);
 };
 
+const getValidTime = (t) => {
+  let val = parseFloat(t.time);
+  if (t.penalty === '+2') val += 2;
+  if (t.penalty === 'DNF') val = Infinity;
+  return val;
+};
+
+const calculateMean = (times, size) => {
+  if (times.length < size) return '-';
+  
+  const validTimes = times.map(getValidTime).filter(t => t !== Infinity);
+  if (validTimes.length === 0) return 'DNF';
+  
+  const sum = validTimes.reduce((acc, val) => acc + val, 0);
+  return formatTime(sum / validTimes.length);
+};
+
 const calculateAverage = (times, size) => {
   if (times.length < size) return '-';
 
-  let validTimes = times.map(t => {
-    let val = parseFloat(t.time);
-    if (t.penalty === '+2') val += 2;
-    if (t.penalty === 'DNF') val = Infinity;
-    return val;
-  });
-
-  // Count DNFs
+  let validTimes = times.map(getValidTime);
   const dnfCount = validTimes.filter(t => t === Infinity).length;
-  
-  // If more than 1 DNF, average is DNF
-  if (dnfCount > 1) return 'DNF';
 
+  // If there are DNFs, calculate mean of valid times (User request)
+  if (dnfCount > 0) {
+    validTimes = validTimes.filter(t => t !== Infinity);
+    if (validTimes.length === 0) return 'DNF';
+    const sum = validTimes.reduce((acc, val) => acc + val, 0);
+    return formatTime(sum / validTimes.length);
+  }
+
+  // Standard WCA Average (Trimmed)
   // Sort to remove best and worst
   validTimes.sort((a, b) => a - b);
 
-  // Remove best (first) and worst (last)
-  // If 1 DNF, it will be at the end (Infinity) and removed as worst
-  validTimes = validTimes.slice(1, -1);
+  // Number of times to remove from each end
+  let trim = 1;
+  if (size >= 100) trim = 5;
+
+  validTimes = validTimes.slice(trim, -trim);
 
   const sum = validTimes.reduce((acc, val) => acc + val, 0);
-  return formatTime(sum / (size - 2));
+  return formatTime(sum / (size - (trim * 2)));
 };
+
+const calculateBest = (times, size, type = 'avg') => {
+  if (times.length < size) return '-';
+  
+  let best = Infinity;
+  
+  for (let i = 0; i <= times.length - size; i++) {
+    const slice = times.slice(i, i + size);
+    let result;
+    if (type === 'mean') {
+      result = calculateMean(slice, size);
+    } else {
+      result = calculateAverage(slice, size);
+    }
+    
+    if (result !== '-' && result !== 'DNF') {
+      const val = parseFloat(result);
+      if (val < best) best = val;
+    }
+  }
+  
+  return best === Infinity ? '-' : formatTime(best);
+};
+
+const stats = computed(() => {
+  const times = props.times;
+  const len = times.length;
+  
+  const current = {
+    time: len > 0 ? (() => {
+      const val = getValidTime(times[len - 1]);
+      return val === Infinity ? 'DNF' : formatTime(val);
+    })() : '-',
+    mo3: len >= 3 ? calculateMean(times.slice(len - 3), 3) : '-',
+    ao5: len >= 5 ? calculateAverage(times.slice(len - 5), 5) : '-',
+    ao12: len >= 12 ? calculateAverage(times.slice(len - 12), 12) : '-',
+    ao100: len >= 100 ? calculateAverage(times.slice(len - 100), 100) : '-'
+  };
+  
+  // Handle single time display for DNF
+  if (len > 0 && times[len - 1].penalty === '+2' && current.time !== 'DNF') current.time += '+';
+
+  // Best calculations
+  const best = {
+    time: len > 0 ? (() => {
+      const valid = times.map(getValidTime).filter(t => t !== Infinity);
+      return valid.length > 0 ? formatTime(Math.min(...valid)) : '-';
+    })() : '-',
+    mo3: calculateBest(times, 3, 'mean'),
+    ao5: calculateBest(times, 5, 'avg'),
+    ao12: calculateBest(times, 12, 'avg'),
+    ao100: calculateBest(times, 100, 'avg')
+  };
+
+  return { current, best };
+});
 
 const processedTimes = computed(() => {
   return props.times.map((entry, index) => {
@@ -185,11 +320,64 @@ const processedTimes = computed(() => {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
 .header-title {
   font-size: 1.2rem;
-  margin-bottom: 15px;
   opacity: 0.7;
   color: var(--table-text-color, #353535);
+  margin-bottom: 0;
+}
+
+.session-dropdown {
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  background-color: transparent;
+  color: var(--table-text-color, #353535);
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.session-dropdown:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.stats-table-container {
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: var(--stats-bg-color, transparent);
+  border-radius: 8px;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--table-text-color, #353535);
+}
+
+.stats-table th {
+  text-align: right;
+  padding: 5px;
+  font-weight: normal;
+  font-size: 0.9rem;
+}
+
+.stats-table td {
+  text-align: right;
+  padding: 5px;
+  font-size: 1rem;
+}
+
+.stats-table .label-col {
+  text-align: left;
+  font-weight: bold;
 }
 
 .table-container {
