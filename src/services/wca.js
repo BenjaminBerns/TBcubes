@@ -7,13 +7,16 @@ const REDIRECT_URI = import.meta.env.VITE_WCA_REDIRECT_URI || window.location.or
 
 export default class WCAService {
   static getAuthUrl() {
+    console.log('WCA Service: Generating Auth URL. Client ID present:', !!CLIENT_ID);
     const params = new URLSearchParams({
       client_id: CLIENT_ID,
       response_type: 'token',
       redirect_uri: REDIRECT_URI,
       scope: 'public',
     });
-    return `${WCA_ORIGIN}/oauth/authorize?${params.toString()}`;
+    const authUrl = `${WCA_ORIGIN}/oauth/authorize?${params.toString()}`;
+    console.log('Redirecting to WCA Auth URL:', authUrl);
+    return authUrl;
   }
 
   static login() {
@@ -42,6 +45,13 @@ export default class WCAService {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Token is invalid or expired
+          localStorage.removeItem('wca_access_token');
+          // Optionally reload or just return null to force re-login
+          // window.location.reload(); 
+          return null;
+        }
         throw new Error('Failed to fetch profile');
       }
 

@@ -273,13 +273,17 @@ const t = computed(() => translations[settings.value.language]);
 const user = ref(null);
 
 onMounted(async () => {
+  console.log('APP MOUNTED - VERSION DEBUG 2.0');
   // Initialize scrambler with correct type
   const initialType = SCRAMBLE_TYPES[currentSessionType.value] || '333';
   scrambler.type(initialType);
   currentScramble.value = scrambler.get(1)[0]; // Initial scramble
 
   // Check for WCA access token in URL (callback)
+  console.log('Checking URL for token. Hash:', window.location.hash);
   const accessToken = WCAService.getAccessTokenFromUrl();
+  console.log('Extracted Access Token:', accessToken);
+  
   if (accessToken) {
     // Save token (optional, for persistence across reloads if not using implicit flow correctly, 
     // but implicit flow usually requires re-auth or storing token in localStorage)
@@ -336,6 +340,19 @@ watch(sessions, async (newSessions) => {
 }, { deep: true });
 
 // ... (login/logout)
+const login = () => {
+  console.log('App: login function called');
+  WCAService.login();
+};
+
+const logout = () => {
+  WCAService.logout();
+  user.value = null;
+};
+
+const handleStart = () => {
+  isTimerRunning.value = true;
+};
 
 const handleStop = async (time, penalty = null) => {
   const newTime = {
@@ -411,7 +428,7 @@ const updateSession = (newSession) => {
   // Update scrambler type
   const scrambleType = SCRAMBLE_TYPES[newSession] || '333';
   scrambler.type(scrambleType);
-  
+
   // Generate new scramble for the new type
   currentScramble.value = scrambler.get(1)[0];
 };
