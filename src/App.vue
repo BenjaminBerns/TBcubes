@@ -8,48 +8,51 @@
       <img v-if="settings.backgroundType === 'image'" :src="settings.backgroundUrl" alt="background" />
       <video v-else-if="settings.backgroundType === 'video'" :src="settings.backgroundUrl" autoplay loop muted playsinline></video>
     </div>
-    <Navigation 
-      class="nav-component" 
-      @open-settings="openSettings" 
-      :translations="t" 
-      @navigate="(view) => currentView = view"
-      :user="user"
-      @login="login"
-      @logout="logout"
-    />
-    <div class="main-content">
-      <template v-if="currentView === 'timer'">
-        <div class="center-container">
-          <Scramble :scramble="currentScramble" class="scramble-component" />
-          <Timer 
-            @on-stop="handleStop" 
-            @on-start="handleStart" 
-            :settings="settings"
-            :last-time="savedTimes.length > 0 ? savedTimes[savedTimes.length - 1] : null"
-            @toggle-penalty="(type) => togglePenalty(savedTimes.length - 1, type)"
-          />
-        </div>
-      </template>
-      <template v-else-if="currentView === 'oll'">
-        <OLLList @back="currentView = 'timer'" />
-      </template>
+    <div class="content-wrapper">
+      <Navigation 
+        class="nav-component" 
+        @open-settings="openSettings" 
+        :translations="t" 
+        @navigate="(view) => currentView = view"
+        :user="user"
+        @login="login"
+        @logout="logout"
+      />
+      <div class="main-content">
+        <template v-if="currentView === 'timer'">
+          <div class="center-container">
+            <Scramble :scramble="currentScramble" class="scramble-component" />
+            <Timer 
+              @on-stop="handleStop" 
+              @on-start="handleStart" 
+              :settings="settings"
+              :last-time="savedTimes.length > 0 ? savedTimes[savedTimes.length - 1] : null"
+              @toggle-penalty="(type) => togglePenalty(savedTimes.length - 1, type)"
+            />
+          </div>
+        </template>
+        <template v-else-if="currentView === 'oll'">
+          <OLLList @back="currentView = 'timer'" />
+        </template>
+      </div>
+      <Save 
+        :times="savedTimes" 
+        :current-session="currentSessionType"
+        :available-sessions="availableSessions"
+        class="save-component" 
+        @delete-time="handleDeleteTime" 
+        @toggle-penalty="togglePenalty"
+        @update-session="updateSession"
+        :translations="t" 
+      />
     </div>
-    <Save 
-      :times="savedTimes" 
-      :current-session="currentSessionType"
-      :available-sessions="availableSessions"
-      class="save-component" 
-      @delete-time="handleDeleteTime" 
-      @toggle-penalty="togglePenalty"
-      @update-session="updateSession"
-      :translations="t" 
-    />
     <SettingsModal 
       :isVisible="isSettingsOpen" 
       :settings="settings" 
       @close="closeSettings" 
       @update-settings="updateSettings"
     />
+    <AdBanner />
   </div>
 </template>
 
@@ -61,6 +64,7 @@ import Navigation from './components/Navigation.vue';
 import Scramble from './components/Scramble.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import OLLList from './components/OLLList.vue';
+import AdBanner from './components/AdBanner.vue';
 
 import Scrambo from 'scrambo';
 import WCAService from './services/wca';
@@ -104,6 +108,16 @@ const settings = ref({
   theme: 'default',
   customThemes: {}
 });
+
+const SCRAMBLE_TYPES = {
+  '2x2': '222',
+  '3x3': '333',
+  '4x4': '444',
+  'Pyraminx': 'pyram',
+  'Megaminx': 'minx',
+  'Square-1': 'sq1',
+  'Blind': '333bf'
+};
 
 const themes = {
   default: {
@@ -259,6 +273,9 @@ const t = computed(() => translations[settings.value.language]);
 const user = ref(null);
 
 onMounted(async () => {
+  // Initialize scrambler with correct type
+  const initialType = SCRAMBLE_TYPES[currentSessionType.value] || '333';
+  scrambler.type(initialType);
   currentScramble.value = scrambler.get(1)[0]; // Initial scramble
 
   // Check for WCA access token in URL (callback)
@@ -339,6 +356,13 @@ const togglePenalty = (index, type) => {
 
 const updateSession = (newSession) => {
   currentSessionType.value = newSession;
+  
+  // Update scrambler type
+  const scrambleType = SCRAMBLE_TYPES[newSession] || '333';
+  scrambler.type(scrambleType);
+  
+  // Generate new scramble for the new type
+  currentScramble.value = scrambler.get(1)[0];
 };
 
 const openSettings = () => {
@@ -364,10 +388,20 @@ const updateSettings = (newSettings) => {
   display: flex;
   width: 100%;
   height: 100vh;
-  flex-direction: row;
+  flex-direction: column;
   overflow: hidden;
   position: relative;
   transition: box-shadow 0.3s ease;
+}
+
+.content-wrapper {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  flex-direction: row;
+  overflow: hidden;
+  position: relative;
 }
 
 .app-container.focus-mode {
@@ -448,7 +482,7 @@ const updateSettings = (newSettings) => {
 }
 
 @media (max-width: 768px) {
-  .app-container {
+  .content-wrapper {
     flex-direction: column;
     height: auto;
     overflow: auto;

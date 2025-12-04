@@ -3,7 +3,7 @@ const WCA_API_URL = `${WCA_ORIGIN}/api/v0`;
 
 // REPLACE THESE WITH YOUR ACTUAL APPLICATION CREDENTIALS
 const CLIENT_ID = 'dc3z8J1OP1F9OPDM50GMpbr4K8YzYJGj1ENE41qh5ek'; 
-const REDIRECT_URI = window.location.origin; // Assumes the app is served from the root
+const REDIRECT_URI = import.meta.env.VITE_WCA_REDIRECT_URI || window.location.origin;
 
 export default class WCAService {
   static getAuthUrl() {
