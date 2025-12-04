@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.86.1",
     "idb": "^8.0.3",
     "jszip": "^3.10.1",
     "scrambo": "^0.3.0",
