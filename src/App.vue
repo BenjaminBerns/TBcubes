@@ -299,58 +299,109 @@ onMounted(async () => {
   }
 });
 
+import SupabaseService from './services/supabase';
+
+// ... (imports)
+
+// ... (getDefaultSessions)
+
+// ... (refs)
+
+// ... (watch user)
 watch(user, async (newUser) => {
-  const userId = newUser ? newUser.id : 'guest';
-  const savedSessions = await db.getUserData(userId);
-  if (savedSessions) {
-    // Merge with default to ensure all keys exist
-    sessions.value = { ...getDefaultSessions(), ...savedSessions };
+  if (newUser) {
+    // Logged in: Load from Supabase
+    const savedSessions = await SupabaseService.fetchUserData(newUser.id);
+    if (savedSessions) {
+      sessions.value = { ...getDefaultSessions(), ...savedSessions };
+    } else {
+      sessions.value = getDefaultSessions();
+    }
   } else {
-    sessions.value = getDefaultSessions();
+    // Guest: Load from IndexedDB
+    const savedSessions = await db.getUserData('guest');
+    if (savedSessions) {
+      sessions.value = { ...getDefaultSessions(), ...savedSessions };
+    } else {
+      sessions.value = getDefaultSessions();
+    }
   }
 }, { immediate: true });
 
+// Watch sessions for GUEST ONLY (IndexedDB sync)
 watch(sessions, async (newSessions) => {
-  const userId = user.value ? user.value.id : 'guest';
-  await db.saveUserData(userId, newSessions);
+  if (!user.value) {
+    await db.saveUserData('guest', newSessions);
+  }
 }, { deep: true });
 
-const login = () => {
-  WCAService.login();
-};
+// ... (login/logout)
 
-const logout = () => {
-  WCAService.logout();
-  user.value = null;
-};
-
-const handleStop = (time, penalty = null) => {
-  sessions.value[currentSessionType.value].push({
+const handleStop = async (time, penalty = null) => {
+  const newTime = {
     time: time,
     scramble: currentScramble.value,
     date: new Date(),
     penalty: penalty // null, 'DNF', '+2'
-  });
+  };
+
+  if (user.value) {
+    // Save to Supabase
+    const savedTime = await SupabaseService.saveTime(user.value.id, currentSessionType.value, newTime);
+    if (savedTime) {
+      // Add to local state with ID from DB
+      sessions.value[currentSessionType.value].push({
+        ...newTime,
+        id: savedTime.id
+      });
+    }
+  } else {
+    // Save to local state (watcher handles IndexedDB)
+    sessions.value[currentSessionType.value].push(newTime);
+  }
+
   isTimerRunning.value = false;
-  currentScramble.value = scrambler.get(1)[0]; // Generate new scramble
+  // Update scrambler type before generating new scramble
+  const scrambleType = SCRAMBLE_TYPES[currentSessionType.value] || '333';
+  scrambler.type(scrambleType);
+  currentScramble.value = scrambler.get(1)[0];
 };
 
-const handleStart = () => {
-  isTimerRunning.value = true;
+// ... (handleStart)
+
+const handleDeleteTime = async (index) => {
+  const timeEntry = sessions.value[currentSessionType.value][index];
+  
+  if (user.value && timeEntry.id) {
+    // Delete from Supabase
+    const success = await SupabaseService.deleteTime(timeEntry.id);
+    if (success) {
+      sessions.value[currentSessionType.value].splice(index, 1);
+    }
+  } else {
+    // Delete from local state
+    sessions.value[currentSessionType.value].splice(index, 1);
+  }
 };
 
-const handleDeleteTime = (index) => {
-  sessions.value[currentSessionType.value].splice(index, 1);
-};
-
-const togglePenalty = (index, type) => {
+const togglePenalty = async (index, type) => {
   const timeEntry = sessions.value[currentSessionType.value][index];
   if (!timeEntry) return;
 
-  if (timeEntry.penalty === type) {
-    timeEntry.penalty = null; // Toggle off
+  let newPenalty = null;
+  if (timeEntry.penalty !== type) {
+    newPenalty = type;
+  }
+
+  if (user.value && timeEntry.id) {
+    // Update Supabase
+    const success = await SupabaseService.updateTime(timeEntry.id, { penalty: newPenalty });
+    if (success) {
+      timeEntry.penalty = newPenalty;
+    }
   } else {
-    timeEntry.penalty = type; // Set new penalty
+    // Update local state
+    timeEntry.penalty = newPenalty;
   }
 };
 
