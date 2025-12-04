@@ -354,9 +354,19 @@ const handleStart = () => {
   isTimerRunning.value = true;
 };
 
-const handleStop = async (time, penalty = null) => {
+const handleStop = async (formattedTime, penalty = null, rawTimeInSeconds = null) => {
+  // If rawTimeInSeconds is not provided (e.g. older Timer component), try to parse formattedTime (risky for > 1min)
+  // But we just updated Timer.vue so it should be there.
+  let timeInMs = 0;
+  if (rawTimeInSeconds !== null && rawTimeInSeconds !== undefined) {
+    timeInMs = Math.round(rawTimeInSeconds * 1000);
+  } else {
+    // Fallback: try to parse simple seconds
+    timeInMs = Math.round(parseFloat(formattedTime) * 1000);
+  }
+
   const newTime = {
-    time: time,
+    time: formattedTime,
     scramble: currentScramble.value,
     date: new Date(),
     penalty: penalty // null, 'DNF', '+2'
@@ -364,7 +374,12 @@ const handleStop = async (time, penalty = null) => {
 
   if (user.value) {
     // Save to Supabase
-    const savedTime = await SupabaseService.saveTime(user.value.id, currentSessionType.value, newTime);
+    // Supabase expects integer milliseconds in 'time_ms'
+    const savedTime = await SupabaseService.saveTime(user.value.id, currentSessionType.value, {
+      ...newTime,
+      time: timeInMs
+    });
+    
     if (savedTime) {
       // Add to local state with ID from DB
       sessions.value[currentSessionType.value].push({

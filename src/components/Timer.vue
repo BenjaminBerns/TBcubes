@@ -164,7 +164,7 @@ const stopTimer = () => {
     penalty = 'DNF';
   }
 
-  emit('on-stop', formatTime(time.value), penalty);
+  emit('on-stop', formatTime(time.value), penalty, time.value);
 };
 
 const handleKeyDown = (e) => {

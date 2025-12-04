@@ -32,7 +32,7 @@ export default class SupabaseService {
       if (sessions[item.session_type]) {
         sessions[item.session_type].push({
           id: item.id, // Store ID for updates/deletes
-          time: item.time_ms,
+          time: item.time_ms / 1000,
           scramble: item.scramble,
           date: new Date(item.date),
           penalty: item.penalty
