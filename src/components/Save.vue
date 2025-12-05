@@ -2,16 +2,24 @@
   <div class="save-container">
     <div class="header-container">
       <h2 class="momo-trust-display-regular color-gray-500 header-title">{{ translations.savedTimes }}</h2>
-      <div class="session-selector">
-        <select 
-          :value="currentSession" 
-          @change="$emit('update-session', $event.target.value)"
-          class="session-dropdown momo-trust-display-regular"
-        >
-          <option v-for="session in availableSessions" :key="session" :value="session">
-            {{ session }}
-          </option>
-        </select>
+      <div class="header-actions">
+        <button class="export-btn" @click="exportToCSV" title="Export CSV">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+          </svg>
+        </button>
+        <div class="session-selector">
+          <select 
+            :value="currentSession" 
+            @change="$emit('update-session', $event.target.value)"
+            class="session-dropdown momo-trust-display-regular"
+          >
+            <option v-for="session in availableSessions" :key="session" :value="session">
+              {{ session }}
+            </option>
+          </select>
+        </div>
       </div>
     </div>
     
@@ -305,6 +313,47 @@ const processedTimes = computed(() => {
     };
   }).reverse();
 });
+
+const exportToCSV = () => {
+  const times = processedTimes.value;
+  if (!times || times.length === 0) return;
+
+  // Header row - using semi-colon for Excel compatibility in many regions
+  const headers = ["No", "Time", "Penalty", "Scramble", "Date", "Ao5", "Ao12"];
+  let csvContent = "";
+  
+  // Add separator instruction for Excel
+  csvContent += "sep=;\n";
+  csvContent += headers.join(";") + "\n";
+
+  // Data rows
+  times.forEach((t) => {
+    const no = t.originalIndex + 1;
+    const time = t.time; // already formatted
+    const penalty = t.penalty || '';
+    // Escape scramble, handle quotes
+    const scramble = t.scramble ? `"${t.scramble.replace(/"/g, '""')}"` : '';
+    const date = t.date ? new Date(t.date).toISOString().split('T')[0] : '';
+    const ao5 = t.avg5;
+    const ao12 = t.avg12;
+
+    const row = [no, time, penalty, scramble, date, ao5, ao12].join(";");
+    csvContent += row + "\n";
+  });
+
+  // Use Blob for better encoding handling (BOM for UTF-8)
+  const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `tb_cube_session_${props.currentSession}_${new Date().toISOString().split('T')[0]}.csv`);
+  document.body.appendChild(link); // Required for FF
+
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 </script>
 
 <style scoped>
@@ -326,6 +375,33 @@ const processedTimes = computed(() => {
   align-items: center;
   margin-bottom: 15px;
 }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.export-btn {
+  background: transparent;
+  border: 1px solid #ddd;
+  color: var(--table-text-color, #353535);
+  border-radius: 5px;
+  padding: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  height: 32px; /* Match height of select approximately */
+  width: 32px;
+}
+
+.export-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
 
 .header-title {
   font-size: 1.2rem;

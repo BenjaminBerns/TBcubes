@@ -50,6 +50,17 @@
           <li class="momo-trust-display-regular color-gray-500">Advanced</li>
         </ul>
       </div>
+
+      <div class="nav-section">
+        <h3 class="momo-trust-display-regular color-gray-500" @click="toggleSection('community')">
+          Community {{ openSections.community ? '-' : '+' }}
+        </h3>
+        <ul v-if="openSections.community" class="nav-list">
+          <li class="momo-trust-display-regular color-gray-500" @click="$emit('navigate', 'leaderboard')">
+            {{ translations.leaderboard || 'Leaderboard' }}
+          </li>
+        </ul>
+      </div>
       
       <div class="settings-container">
         <button class="settings-btn" @click="$emit('open-settings')">
@@ -87,7 +98,8 @@ const props = defineProps({
 const isOpen = ref(false); // Closed by default
 const openSections = ref({
   algorithms: false,
-  tutorials: false
+  tutorials: false,
+  community: false
 });
 
 const emit = defineEmits(['open-settings', 'navigate', 'login', 'logout']);

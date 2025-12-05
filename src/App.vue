@@ -34,6 +34,13 @@
         <template v-else-if="currentView === 'oll'">
           <OLLList @back="currentView = 'timer'" />
         </template>
+        <template v-else-if="currentView === 'leaderboard'">
+          <Leaderboard 
+            @close="currentView = 'timer'" 
+            :current-session="currentSessionType"
+            :available-sessions="availableSessions"
+          />
+        </template>
       </div>
       <Save 
         :times="savedTimes" 
@@ -64,6 +71,7 @@ import Navigation from './components/Navigation.vue';
 import Scramble from './components/Scramble.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import OLLList from './components/OLLList.vue';
+import Leaderboard from './components/Leaderboard.vue';
 import AdBanner from './components/AdBanner.vue';
 
 import Scrambo from 'scrambo';
@@ -252,7 +260,9 @@ const translations = {
     time: 'Time',
     avg5: 'Avg 5',
     avg12: 'Avg 12',
-    settings: 'Settings'
+    settings: 'Settings',
+    leaderboard: 'Leaderboard',
+    account: 'Account'
   },
   fr: {
     menu: 'Menu',
@@ -262,7 +272,9 @@ const translations = {
     time: 'Temps',
     avg5: 'Moy 5',
     avg12: 'Moy 12',
-    settings: 'Paramètres'
+    settings: 'Paramètres',
+    leaderboard: 'Classement',
+    account: 'Compte'
   }
 };
 
@@ -316,6 +328,10 @@ watch(user, async (newUser) => {
   if (newUser) {
     // Logged in: Load from Supabase
     const savedSessions = await SupabaseService.fetchUserData(newUser.id);
+    
+    // Sync profile to Supabase (for leaderboard)
+    SupabaseService.upsertProfile(newUser).catch(err => console.error('Failed to sync profile', err));
+
     if (savedSessions) {
       sessions.value = { ...getDefaultSessions(), ...savedSessions };
     } else {
